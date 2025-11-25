@@ -51,9 +51,7 @@ public class Statistics {
 	public int get_max_authors() {
 		int max = 0;
 		for (int i : authors.values()) {
-			if (i > max) {
-				max = i;
-			}
+			max = Math.max(max, i);
 		}
 		return max;
 	}
