@@ -6,13 +6,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 // This class must be updated by one thread at a time
 
 public class Statistics {
-	private final Object lock = new Object();
-
 	private final AtomicInteger duplicates_found;
 	private final AtomicInteger unique_articles;
 
 	public Map<String, Integer> authors;
-	public Map<String, Integer> languages;
 	public Map<Time, String> most_recent_articles;
 	public Map<String, Integer> top_keyword_en;
 
@@ -26,7 +23,6 @@ public class Statistics {
 
 	private Statistics() {
 		authors = new ConcurrentHashMap<>();
-		languages = new ConcurrentHashMap<>();
 		most_recent_articles = new ConcurrentHashMap<>();
 		top_keyword_en = new ConcurrentHashMap<>();
 
@@ -91,17 +87,70 @@ public class Statistics {
 	}
 
 	public void update_categories(String category) {
-		if (!categories_list.containsKey(category)) {
-			categories_list.put(category, new TreeSet<>(Comparator.comparing(Article::getUuid)));
-		}
+		categories_list.putIfAbsent(category, ConcurrentHashMap.newKeySet());
 	}
 
 	public void add_article_to_category(Article article) {
-		if (check_if_duplicated(article)) return;
+		if (check_if_duplicated(article)) {
+			for (String category : article.categories) {
+				if (!categories_list.containsKey(category)) continue;
+
+				categories_list.get(category).remove(article);
+			}
+			return;
+		}
 
 		for (String category : article.categories) {
 			if (!categories_list.containsKey(category)) continue;
 			categories_list.get(category).add(article);
+		}
+	}
+
+	public void print_categories() {
+		String filepath = "../output/categories";
+		for (String category : categories_list.keySet()) {
+			if (categories_list.get(category).isEmpty()) continue;
+
+			if (category.contains(" ")) {
+				category.replaceAll(" ", "_");
+			}
+			if (category.contains(",")) {
+				category.replaceAll(",", "");
+			}
+			String new_filepath = filepath + "/" + category + ".txt";
+
+			List<Article> aux_list = new ArrayList<>(categories_list.get(category));
+			aux_list.sort(Comparator.comparing(Article::getUuid));
+
+			// urmeaza partea de printare in fisierul de output
+		}
+	}
+
+	public void update_languages(String lannguage) {
+		languages_list.putIfAbsent(lannguage, ConcurrentHashMap.newKeySet());
+	}
+
+	public void add_article_to_language(Article article) {
+		if (check_if_duplicated(article)) {
+			if (!languages_list.containsKey(article.language)) return;
+			languages_list.get(article.language).remove(article);
+		}
+
+		if (!languages_list.containsKey(article.language)) return;
+		languages_list.get(article.language).add(article);
+	}
+
+	public void print_languages() {
+		String filepath = "../output/languages";
+		for (String language : languages_list.keySet()) {
+			if (languages_list.get(language).isEmpty()) continue;
+
+			String new_filepath = filepath + "/" + language + ".txt";
+
+			List<Article> aux_list = new ArrayList<>(languages_list.get(language));
+			aux_list.sort(Comparator.comparing(Article::getUuid));
+
+			// urmeaza partea de printare in fisierul de output
 		}
 	}
 
