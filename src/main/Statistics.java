@@ -148,7 +148,6 @@ public class Statistics {
 		}
 	}
 
-
 	// momentan am adaugat orice articol in lista de cel mai recent articol
 	public void update_most_recent_article(Article article) {
 		most_recent_articles.put(date_format.format(article.getPublished()), article.getUuid());
@@ -167,11 +166,11 @@ public class Statistics {
 
 	public void update_authors(String author) {
 		if (!authors.containsKey(author)) {
-			authors.put(author, 1);
+			authors.put(author, Integer.valueOf(1));
 		} else {
 			int count = authors.get(author);
 			count++;
-			authors.put(author, count);
+			authors.put(author, Integer.valueOf(count));
 		}
 	}
 
