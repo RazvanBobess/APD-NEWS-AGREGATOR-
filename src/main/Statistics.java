@@ -1,4 +1,4 @@
-import java.sql.Time;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -6,11 +6,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 // This class must be updated by one thread at a time
 
 public class Statistics {
+	private static final SimpleDateFormat date_format = new SimpleDateFormat("yyyy-MM-ddTHH:mm:ssZ");
+
 	private final AtomicInteger duplicates_found;
 	private final AtomicInteger unique_articles;
 
 	public Map<String, Integer> authors;
-	public Map<Time, String> most_recent_articles;
 	public Map<String, Integer> top_keyword_en;
 
 	public Set<Article> duplicated_articles;
@@ -18,6 +19,7 @@ public class Statistics {
 
 	public Map<String, Set<Article>> categories_list;
 	public Map<String, Set<Article>> languages_list;
+	public Map<String, String> most_recent_articles;
 
 	public static volatile Statistics instance;
 
@@ -46,14 +48,6 @@ public class Statistics {
 			return instance;
 		}
 		return instance;
-	}
-
-	public int get_max_authors() {
-		int max = 0;
-		for (int i : authors.values()) {
-			max = Math.max(max, i);
-		}
-		return max;
 	}
 
 	public AtomicInteger get_duplicates_found() {
@@ -154,6 +148,23 @@ public class Statistics {
 		}
 	}
 
+
+	// momentan am adaugat orice articol in lista de cel mai recent articol
+	public void update_most_recent_article(Article article) {
+		most_recent_articles.put(date_format.format(article.getPublished()), article.getUuid());
+	}
+
+	public void print_most_recent_articles() {
+		if (most_recent_articles.isEmpty()) return;
+
+		List<Map.Entry<String, String>> aux_list = new ArrayList<>(most_recent_articles.entrySet());
+		aux_list.sort(Comparator.comparing(Map.Entry<String, String>::getKey).thenComparing(Map.Entry::getValue));
+
+		for (Map.Entry<String, String> date : aux_list) {
+			System.out.println(date.getValue() + " " + date_format.format(date.getKey()));
+		}
+	}
+
 	public void update_authors(String author) {
 		if (!authors.containsKey(author)) {
 			authors.put(author, 1);
@@ -163,5 +174,14 @@ public class Statistics {
 			authors.put(author, count);
 		}
 	}
+
+	public int get_max_authors() {
+		int max = 0;
+		for (int i : authors.values()) {
+			max = Math.max(max, i);
+		}
+		return max;
+	}
+
 
 }
