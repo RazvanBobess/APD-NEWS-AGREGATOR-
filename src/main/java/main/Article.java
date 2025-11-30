@@ -48,13 +48,12 @@ public class Article {
 		if (this == o) return true;
 		if (!(o instanceof Article)) return false;
 		Article article = (Article) o;
-		return Objects.equals(uuid, article.uuid) ||
-				Objects.equals(title, article.title);
+		return Objects.equals(uuid, article.uuid);
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(uuid, title);
+		return Objects.hash(uuid);
 	}
 
 	public void addCategory(String category) {
