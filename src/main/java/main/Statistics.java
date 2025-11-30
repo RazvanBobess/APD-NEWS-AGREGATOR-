@@ -1,5 +1,8 @@
 package main;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -52,6 +55,8 @@ public class Statistics {
 		return instance;
 	}
 
+	// These methods deal with the articles which will be added into the database
+
 	public AtomicInteger get_duplicates_found() {
 		return duplicates_found;
 	}
@@ -81,6 +86,10 @@ public class Statistics {
 		instance.unique_articles.incrementAndGet();
 		return false;
 	}
+
+	// This part is for categories, adding a new category to the database
+	// and adding an article / removing an article from a category
+	// Also, printing the categories
 
 	public void update_categories(String category) {
 		categories_list.putIfAbsent(category, ConcurrentHashMap.newKeySet());
@@ -122,6 +131,26 @@ public class Statistics {
 		}
 	}
 
+	public void add_categories(String file_path) {
+		try (BufferedReader br = new BufferedReader(new FileReader(file_path))) {
+			int lines = Integer.parseInt(br.readLine());
+			for (int i = 0; i < lines; i++) {
+				String line = br.readLine();
+				update_categories(line);
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public Map<String, Set<Article>> getCategories_list() {
+		return categories_list;
+	}
+
+	// This part is for languages, adding a new language to the database
+	// and adding an article / removing an article from a language list
+	// Also, printing the languages
+
 	public void update_languages(String lannguage) {
 		languages_list.putIfAbsent(lannguage, ConcurrentHashMap.newKeySet());
 	}
@@ -150,7 +179,9 @@ public class Statistics {
 		}
 	}
 
-	// momentan am adaugat orice articol in lista de cel mai recent articol
+	// This part is for the most recent articles -> will print the content of the list
+	// in "all_articles.txt"
+
 	public void update_most_recent_article(Article article) {
 		most_recent_articles.put(date_format.format(article.getPublished()), article.getUuid());
 	}
@@ -184,5 +215,29 @@ public class Statistics {
 		return max;
 	}
 
+	// This part is for parsing the input file, which contains all the paths
+	// to the files of interest
 
+	public void parse_file(String file_path) {
+		try (BufferedReader br = new BufferedReader(new FileReader(file_path))) {
+			int count = Integer.parseInt(br.readLine());
+
+			String line;
+
+			for (int i = 0; i < count; i++) {
+				line = br.readLine();
+
+				if (line.contains("languages")) {
+
+				} else if (line.contains("categories")) {
+					add_categories(line);
+				} else if (line.contains("english_linking_words")) {
+
+				}
+			}
+
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
 }
