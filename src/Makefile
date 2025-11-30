@@ -1,8 +1,9 @@
+.PHONY: build run clean
 
-build: src/main
+build:
 	mvn compile
 
-run: src/main
+run: build
 	mvn exec:java -Dexec.mainClass="main.Main"
 
 clean:
