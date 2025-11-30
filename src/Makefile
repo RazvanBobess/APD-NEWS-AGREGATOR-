@@ -4,7 +4,7 @@ build:
 	mvn compile
 
 run: build
-	mvn exec:java -Dexec.mainClass="main.Main"
+	mvn exec:java -Dexec.mainClass="main.Main" -Dexec.args="$(ARGS)"
 
 clean:
 	mvn clean
