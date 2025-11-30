@@ -1,13 +1,9 @@
-JAVAC = javac
-JAVA = java
-SOURCES = ./main/*.java
-CLASSES = ./main/*.class
 
-build: main
-	$(JAVAC) $(SOURCES)
+build: src/main
+	mvn compile
 
-run: build
-	$(JAVA) Main
+run: src/main
+	mvn exec:java -Dexec.mainClass="main.Main"
 
 clean:
-	rm -f $(CLASSES)
+	mvn clean
