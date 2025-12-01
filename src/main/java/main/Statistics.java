@@ -6,8 +6,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// This class must be updated by one thread at a time
-
 public class Statistics {
 	private static final SimpleDateFormat date_format = new SimpleDateFormat("yyyy-MM-ddTHH:mm:ssZ");
 
@@ -30,7 +28,6 @@ public class Statistics {
 	public static volatile Statistics instance;
 
 	private Statistics() {
-		authors = new ConcurrentHashMap<>();
 		most_recent_articles = new ConcurrentHashMap<>();
 		english_linking_words = ConcurrentHashMap.newKeySet();
 		top_keyword_en = new ConcurrentHashMap<>();
@@ -44,6 +41,8 @@ public class Statistics {
 
 		duplicates_found = new AtomicInteger(0);
 		unique_articles = new AtomicInteger(0);
+
+		authors = new ConcurrentHashMap<>();
 	}
 
 	public static Statistics getInstance() {
@@ -145,16 +144,17 @@ public class Statistics {
 		}
 	}
 
+	public void normalize_category(String category) {
+		category.replaceAll(" ", "_");
+		category.replaceAll(",", "");
+	}
+
 	public void print_categories() {
 		for (String category : get_categories().keySet()) {
 			if (get_categories().get(category).isEmpty()) continue;
 
-			if (category.contains(" ")) {
-				category.replaceAll(" ", "_");
-			}
-			if (category.contains(",")) {
-				category.replaceAll(",", "");
-			}
+			normalize_category(category);
+
 			String new_filepath = category + ".txt";
 
 			List<String> aux_list = new ArrayList<>(get_categories().get(category));
@@ -251,11 +251,9 @@ public class Statistics {
 		get_recent_articles().put(date_format.format(article.getPublished()), article.getUuid());
 	}
 
-	public void print_most_recent_articles() {
-		if (get_recent_articles().isEmpty()) return;
-
-		List<Map.Entry<String, String>> aux_list = new ArrayList<>(get_recent_articles().entrySet());
-		aux_list.sort((entry1, entry2) -> {
+	public List<Map.Entry<String, String>> sort_recent_articles_list() {
+		List<Map.Entry<String, String>> sort_list = new ArrayList<>(get_recent_articles().entrySet());
+		sort_list.sort((entry1, entry2) -> {
 			int dateComp = entry2.getKey().compareTo(entry1.getKey());
 
 			if (dateComp != 0) {
@@ -264,6 +262,14 @@ public class Statistics {
 
 			return entry1.getValue().compareTo(entry2.getValue());
 		});
+
+		return sort_list;
+	}
+
+	public void print_most_recent_articles() {
+		if (get_recent_articles().isEmpty()) return;
+
+		List<Map.Entry<String, String>> aux_list = sort_recent_articles_list();
 
 		String filepath = "all_articles.txt";
 
@@ -333,11 +339,9 @@ public class Statistics {
 		}
 	}
 
-	public void print_top_keyword_en() {
-		List<Map.Entry<String, Integer>> aux_list;
-		aux_list = new ArrayList<>(get_top_keyword_en().entrySet());
-
-		aux_list.sort((entry1, entry2) -> {
+	public List<Map.Entry<String, Integer>> sort_top_keyword_en_list() {
+		List<Map.Entry<String, Integer>> sort_list = new ArrayList<>(get_top_keyword_en().entrySet());
+		sort_list.sort((entry1, entry2) -> {
 			int countComp = entry2.getValue().compareTo(entry1.getValue());
 
 			if (countComp != 0) {
@@ -346,6 +350,12 @@ public class Statistics {
 
 			return entry1.getKey().compareTo(entry2.getKey());
 		});
+
+		return sort_list;
+	}
+
+	public void print_top_keyword_en() {
+		List<Map.Entry<String, Integer>> aux_list = sort_top_keyword_en_list();
 
 		String filepath = "keywords_count.txt";
 
@@ -358,22 +368,92 @@ public class Statistics {
 		}
 	}
 
-	public void update_authors(String author) {
+	// This part will print the other reports in "reports.txt"
+
+	public void add_authors(String author) {
 		if (!authors.containsKey(author)) {
-			authors.put(author, Integer.valueOf(1));
+			authors.put(author, 1);
 		} else {
 			int count = authors.get(author);
 			count++;
-			authors.put(author, Integer.valueOf(count));
+			authors.put(author, count);
 		}
 	}
 
-	public int get_max_authors() {
-		int max = 0;
-		for (int i : authors.values()) {
-			max = Math.max(max, i);
+	public void update_authors() {
+		for (Article article : get_unique_articles_list()) {
+			add_authors(article.getAuthor());
 		}
-		return max;
+	}
+
+	public Map.Entry<String, Integer> get_max_authors() {
+
+		Map.Entry<String, Integer> max_entry = null;
+
+		update_authors();
+
+		for (Map.Entry<String, Integer> entry : authors.entrySet()) {
+			if (max_entry == null || entry.getValue() > max_entry.getValue()) {
+				max_entry = entry;
+			}
+			if (Objects.equals(entry.getValue(), max_entry.getValue()) && entry.getKey().compareTo(max_entry.getKey()) < 0) {
+				max_entry = entry;
+			}
+		}
+
+		return max_entry;
+	}
+
+	public Map.Entry<String, Integer> get_top_language() {
+		Map.Entry<String, Integer> max_entry = null;
+
+		for (Map.Entry<String, Set<String>> entry : get_languages().entrySet()) {
+			if (max_entry == null || entry.getValue().size() > max_entry.getValue()) {
+				max_entry = Map.entry(entry.getKey(), entry.getValue().size());
+			}
+			if (Objects.equals(entry.getValue().size(), max_entry.getValue()) && entry.getKey().compareTo(max_entry.getKey()) < 0) {
+				max_entry = Map.entry(entry.getKey(), entry.getValue().size());
+			}
+		}
+
+		return max_entry;
+	}
+
+	public Map.Entry<String, Integer> get_top_category() {
+		Map.Entry<String, Integer> max_entry = null;
+
+		for (Map.Entry<String, Set<String>> entry : get_categories().entrySet()) {
+			if (max_entry == null || entry.getValue().size() > max_entry.getValue()) {
+				max_entry = Map.entry(entry.getKey(), entry.getValue().size());
+			}
+			if (Objects.equals(entry.getValue().size(), max_entry.getValue()) && entry.getKey().compareTo(max_entry.getKey()) < 0) {
+				max_entry = Map.entry(entry.getKey(), entry.getValue().size());
+			}
+		}
+
+		return max_entry;
+	}
+
+	public void print_reports() {
+		String filepath = "reports.txt";
+
+		Map.Entry<String, Integer> max_entry = get_max_authors();
+		Map.Entry<String, Integer> top_lang = get_top_language();
+		Map.Entry<String, Integer> top_cat = get_top_category();
+		Map.Entry<String, String> most_recent = sort_recent_articles_list().getFirst();
+		Map.Entry<String, Integer> top_keyword_en = sort_top_keyword_en_list().getFirst();
+
+		try (BufferedWriter bw = new BufferedWriter(new FileWriter(filepath))) {
+			bw.write("duplicates_found - " + get_duplicates_found() + "\n");
+			bw.write("unique_articles - " + get_unique_articles() + "\n");
+			bw.write("best_author - " + max_entry.getKey() + " " + max_entry.getValue() + "\n");
+			bw.write("top_languages - " + top_lang.getKey() + " " + top_lang.getValue() + "\n");
+			bw.write("top_category - " + top_cat.getKey() + " " + top_cat.getValue() + "\n");
+			bw.write("most_recent_article - " + most_recent.getKey() + " " + most_recent.getValue() + "\n");
+			bw.write("top_keyword_en - " + top_keyword_en.getKey() + " " + top_keyword_en.getValue() + "\n");
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	// This part is for parsing the input file, which contains all the paths

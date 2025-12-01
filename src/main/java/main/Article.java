@@ -6,17 +6,19 @@ import java.util.Set;
 
 public class Article {
 	public String uuid;
-	public String title;
 	public String url;
+	public String author;
+	public String title;
 	public String text;
 	public String published;
 	public String language;
 	public Set<String> categories;
 
-	public Article(String uuid, String title, String url, String text, String published, String language) {
+	public Article(String uuid, String url, String author, String title, String text, String published, String language) {
 		this.uuid = uuid;
-		this.title = title;
 		this.url = url;
+		this.author = author;
+		this.title = title;
 		this.text = text;
 		this.published = published;
 		this.language = language;
@@ -33,6 +35,10 @@ public class Article {
 
 	public String getUrl() {
 		return url;
+	}
+
+	public String getAuthor() {
+		return author;
 	}
 
 	public String getPublished() {
