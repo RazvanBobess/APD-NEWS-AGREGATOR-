@@ -47,48 +47,17 @@ public class Statistics {
 
 	public static Statistics getInstance() {
 		if (instance == null) {
-			synchronized (Statistics.class) {
-				if (instance == null) {
-					instance = new Statistics();
-				}
-			}
-			return instance;
+			instance = new Statistics();
 		}
 		return instance;
 	}
 
-	// These methods deal with the articles which will be added into the database
-
-	public AtomicInteger get_duplicates_found() {
-		return duplicates_found;
-	}
-
-	public AtomicInteger get_unique_articles() {
-		return unique_articles;
-	}
-
-	public void add_duplicates_found() {
-		get_duplicates_found().incrementAndGet();
-	}
-
-	public Map<Article, Integer> get_articles_received() {
-		return articles_received;
-	}
-
-	public Map<String, String> get_seen_titles() {
-		return seen_titles;
-	}
-
-	public Article get_article_by_uuid(String uuid) {
-		return seen_uuids.get(uuid);
-	}
-
-	public synchronized Article found_match(Article article) {
-		if (get_articles_received().containsKey(article)) {
+	public Article found_match(Article article) {
+		if (articles_received.containsKey(article)) {
 			return article;
 		}
 
-		String aux = get_seen_titles().get(article.title);
+		String aux = seen_titles.get(article.title);
 		if (aux == null) return null;
 
 		return seen_uuids.get(aux);
@@ -98,42 +67,30 @@ public class Statistics {
 		Article aux = found_match(article);
 
 		if (aux != null) {
-			if (get_articles_received().get(aux) == 1) {
-				get_articles_received().put(aux, 2);
-				add_duplicates_found();
-				get_unique_articles().decrementAndGet();
+			if (articles_received.get(aux) == 1) {
+				articles_received.put(aux, 2);
+				duplicates_found.incrementAndGet();
+				unique_articles.decrementAndGet();
 			} else {
-				get_articles_received().put(aux, get_articles_received().get(aux) + 1);
+				articles_received.put(aux, articles_received.get(aux) + 1);
 			}
-			add_duplicates_found();
+			duplicates_found.incrementAndGet();
 			return true;
 		}
 
-		get_articles_received().put(article, 1);
-		get_unique_articles().incrementAndGet();
-		get_seen_titles().put(article.title, article.uuid);
+		articles_received.put(article, 1);
+		unique_articles.incrementAndGet();
+		seen_titles.put(article.title, article.uuid);
 		seen_uuids.put(article.uuid, article);
 		return false;
 	}
 
-	// This part is for categories, adding a new category to the database
-	// and adding an article / removing an article from a category
-	// Also, printing the categories
-
-	public Map<String, Set<String>> get_categories() {
-		return categories_list;
-	}
-
-	public synchronized void update_categories(String category) {
-		get_categories().putIfAbsent(category, ConcurrentHashMap.newKeySet());
-	}
-
 	public synchronized void add_article_to_category(Article article) {
-		if (get_articles_received().get(article) >= 2) return;
+		if (articles_received.get(article) >= 2) return;
 
 		for (String category : article.categories) {
-			if (!get_categories().containsKey(category)) continue;
-			get_categories().get(category).add(article.getUuid());
+			if (!categories_list.containsKey(category)) continue;
+			categories_list.get(category).add(article.getUuid());
 		}
 	}
 
@@ -145,14 +102,14 @@ public class Statistics {
 	}
 
 	public void print_categories() {
-		for (String category : get_categories().keySet()) {
-			if (get_categories().get(category).isEmpty()) continue;
+		for (String category : categories_list.keySet()) {
+			if (categories_list.get(category).isEmpty()) continue;
 
 			String output_category = normalize_category(category);
 
 			Path path = Paths.get(output_category + ".txt");
 
-			List<String> aux_list = new ArrayList<>(get_categories().get(category));
+			List<String> aux_list = new ArrayList<>(categories_list.get(category));
 			aux_list.sort(Comparator.naturalOrder());
 
 			try (BufferedWriter bw = Files.newBufferedWriter(path)) {
@@ -170,37 +127,25 @@ public class Statistics {
 			int lines = Integer.parseInt(br.readLine());
 			for (int i = 0; i < lines; i++) {
 				String line = br.readLine();
-				update_categories(line);
+				categories_list.putIfAbsent(line, ConcurrentHashMap.newKeySet());
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
 
-	// This part is for languages, adding a new language to the database
-	// and adding an article / removing an article from a language list
-	// Also, printing the languages
-
-	public Map<String, Set<String>> get_languages() {
-		return languages_list;
-	}
-
-	public synchronized void update_languages(String language) {
-		get_languages().putIfAbsent(language, ConcurrentHashMap.newKeySet());
-	}
-
 	public synchronized void add_article_to_language(Article article) {
-		if (get_articles_received().get(article) >= 2) return;
+		if (articles_received.get(article) >= 2) return;
 
-		if (!get_languages().containsKey(article.language)) return;
-		get_languages().get(article.language).add(article.getUuid());
+		if (!languages_list.containsKey(article.language)) return;
+		languages_list.get(article.language).add(article.getUuid());
 	}
 
 	public void print_languages() {
-		for (String language : get_languages().keySet()) {
-			if (get_languages().get(language).isEmpty()) continue;
+		for (String language : languages_list.keySet()) {
+			if (languages_list.get(language).isEmpty()) continue;
 
-			List<String> aux_list = new ArrayList<>(get_languages().get(language));
+			List<String> aux_list = new ArrayList<>(languages_list.get(language));
 			aux_list.sort(Comparator.naturalOrder());
 
 			Path path = Paths.get(language + ".txt");
@@ -222,7 +167,7 @@ public class Statistics {
 
 			for (int i = 0; i < count; i++) {
 				line = br.readLine();
-				update_languages(line);
+				languages_list.putIfAbsent(line, ConcurrentHashMap.newKeySet());
 			}
 
 		} catch (IOException e) {
@@ -230,24 +175,16 @@ public class Statistics {
 		}
 	}
 
-	// This part is for the most recent articles -> will print the content of the list
-	// in "all_articles.txt"
-
-	public Map<String, String> get_recent_articles() {
-		return most_recent_articles;
-	}
-
 	public synchronized void add_most_recent_article(Article article) {
-		int count = get_articles_received().get(article);
+		int count = articles_received.get(article);
 
 		if (count == 1) {
-			get_recent_articles().put(article.getUuid(), article.getPublished());
+			most_recent_articles.put(article.getUuid(), article.getPublished());
 		}
-
 	}
 
 	public List<Map.Entry<String, String>> sort_recent_articles_list() {
-		List<Map.Entry<String, String>> sort_list = new ArrayList<>(get_recent_articles().entrySet());
+		List<Map.Entry<String, String>> sort_list = new ArrayList<>(most_recent_articles.entrySet());
 		sort_list.sort((entry1, entry2) -> {
 			int dateComp = entry2.getValue().compareTo(entry1.getValue());
 
@@ -262,7 +199,7 @@ public class Statistics {
 	}
 
 	public void print_most_recent_articles() {
-		if (get_recent_articles().isEmpty()) return;
+		if (most_recent_articles.isEmpty()) return;
 
 		List<Map.Entry<String, String>> aux_list = sort_recent_articles_list();
 
@@ -278,17 +215,6 @@ public class Statistics {
 		}
 	}
 
-	// This part will be for creating the list with the most used English words
-	// and printing it in "keywords_count.txt"
-
-	public Set<String> get_linking_words() {
-		return english_linking_words;
-	}
-
-	public void add_linking_word(String word) {
-		get_linking_words().add(word);
-	}
-
 	public void read_linking_words(String filepath) {
 		try (BufferedReader br = new BufferedReader(new FileReader(filepath))) {
 			int count = Integer.parseInt(br.readLine());
@@ -296,25 +222,11 @@ public class Statistics {
 
 			for (int i = 0; i < count; i++) {
 				line = br.readLine();
-				add_linking_word(line);
+				english_linking_words.add(line);
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-	}
-
-	public boolean check_linking_word(String word) {
-		return get_linking_words().contains(word);
-	}
-
-	public Map<String, Integer> get_top_keyword_en() {
-		return top_keyword_en;
-	}
-
-	public synchronized void update_top_keyword_en(String word) {
-		if (check_linking_word(word))
-			return;
-		get_top_keyword_en().put(word, get_top_keyword_en().getOrDefault(word, 0) + 1);
 	}
 
 	public Set<String> parse_text(String text) {
@@ -330,7 +242,7 @@ public class Statistics {
 	}
 
 	public synchronized void add_article_top_keyword(Article article) {
-		if (get_articles_received().get(article) >= 2) return;
+		if (articles_received.get(article) >= 2) return;
 
 		if (!article.language.equals("english")) {
 			return;
@@ -339,22 +251,21 @@ public class Statistics {
 		Set<String> aux_tokens = parse_text(article.text.toLowerCase());
 
 		for (String token : aux_tokens) {
-			update_top_keyword_en(token);
+			if (english_linking_words.contains(token)) continue;
+			top_keyword_en.put(token, top_keyword_en.getOrDefault(token, 0) + 1);
 		}
 	}
 
 	public List<Map.Entry<String, Integer>> sort_top_keyword_en_list() {
-		List<Map.Entry<String, Integer>> sort_list = new ArrayList<>(get_top_keyword_en().entrySet());
+		List<Map.Entry<String, Integer>> sort_list = new ArrayList<>(top_keyword_en.entrySet());
+
 		sort_list.sort((entry1, entry2) -> {
 			int countComp = entry2.getValue().compareTo(entry1.getValue());
-
 			if (countComp != 0) {
 				return countComp;
 			}
-
 			return entry1.getKey().compareTo(entry2.getKey());
 		});
-
 		return sort_list;
 	}
 
@@ -374,8 +285,6 @@ public class Statistics {
 		}
 	}
 
-	// This part will print the other reports in "reports.txt"
-
 	public void add_authors(String author) {
 		if (!authors.containsKey(author)) {
 			authors.put(author, 1);
@@ -387,14 +296,13 @@ public class Statistics {
 	}
 
 	public void update_authors() {
-		for (Map.Entry<Article, Integer> entry : get_articles_received().entrySet()) {
+		for (Map.Entry<Article, Integer> entry : articles_received.entrySet()) {
 			if (entry.getValue() > 1) continue;
 			add_authors(entry.getKey().author);
 		}
 	}
 
 	public Map.Entry<String, Integer> get_max_authors() {
-
 		Map.Entry<String, Integer> max_entry = null;
 
 		update_authors();
@@ -414,7 +322,7 @@ public class Statistics {
 	public Map.Entry<String, Integer> get_top_language() {
 		Map.Entry<String, Integer> max_entry = null;
 
-		for (Map.Entry<String, Set<String>> entry : get_languages().entrySet()) {
+		for (Map.Entry<String, Set<String>> entry : languages_list.entrySet()) {
 			if (max_entry == null || entry.getValue().size() > max_entry.getValue()) {
 				max_entry = Map.entry(entry.getKey(), entry.getValue().size());
 			}
@@ -429,7 +337,7 @@ public class Statistics {
 	public Map.Entry<String, Integer> get_top_category() {
 		Map.Entry<String, Integer> max_entry = null;
 
-		for (Map.Entry<String, Set<String>> entry : get_categories().entrySet()) {
+		for (Map.Entry<String, Set<String>> entry : categories_list.entrySet()) {
 			if (max_entry == null || entry.getValue().size() > max_entry.getValue()) {
 				max_entry = Map.entry(entry.getKey(), entry.getValue().size());
 			}
@@ -450,13 +358,13 @@ public class Statistics {
 		Map.Entry<String, Integer> top_cat = get_top_category();
 		Map.Entry<String, String> most_recent = sort_recent_articles_list().getFirst();
 
-		Article recent_article = get_article_by_uuid(most_recent.getKey());
+		Article recent_article = seen_uuids.get(most_recent.getKey());
 
 		Map.Entry<String, Integer> top_keyword_en = sort_top_keyword_en_list().getFirst();
 
 		try (BufferedWriter bw = Files.newBufferedWriter(path)) {
-			bw.write("duplicates_found - " + get_duplicates_found() + "\n");
-			bw.write("unique_articles - " + get_unique_articles() + "\n");
+			bw.write("duplicates_found - " + duplicates_found + "\n");
+			bw.write("unique_articles - " + unique_articles + "\n");
 			bw.write("best_author - " + max_entry.getKey() + " " + max_entry.getValue() + "\n");
 			bw.write("top_language - " + top_lang.getKey() + " " + top_lang.getValue() + "\n");
 			bw.write("top_category - " + normalize_category(top_cat.getKey()) + " " + top_cat.getValue() + "\n");
@@ -466,9 +374,6 @@ public class Statistics {
 			e.printStackTrace();
 		}
 	}
-
-	// This part is for parsing the input file, which contains all the paths
-	// to the files of interest
 
 	private String extract_file_path(String line) {
 		String[] tokens = line.split(" ");

@@ -23,7 +23,7 @@ public class MyThread extends Thread{
 		this.articles_list = articles_list;
 		this.id = id;
 		this.instance = instance;
-		barrier = br;
+		this.barrier = br;
 		articles_received = new ArrayList<>();
 	}
 
@@ -32,10 +32,6 @@ public class MyThread extends Thread{
 		try {
 			int start = id * articles_list.size() / P;
 			int end = (id + 1) * articles_list.size() / P;
-
-			if (end > articles_list.size()) {
-				end = articles_list.size();
-			}
 
 			ObjectMapper mapper = new ObjectMapper();
 
@@ -56,7 +52,7 @@ public class MyThread extends Thread{
 					}
 				}
 			}
-			barrier.await();
+			this.barrier.await();
 			for (int i = 0; i < articles_received.size(); i++) {
 				instance.add_article_to_category(articles_received.get(i));
 				instance.add_article_to_language(articles_received.get(i));
@@ -64,7 +60,7 @@ public class MyThread extends Thread{
 				instance.add_article_top_keyword(articles_received.get(i));
 			}
 
-			barrier.await();
+			this.barrier.await();
 			if (id == 0) {
 				instance.print_categories();
 				instance.print_languages();
