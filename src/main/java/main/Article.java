@@ -14,6 +14,8 @@ public class Article {
 	public String language;
 	public Set<String> categories;
 
+	public Article() {}
+
 	public Article(String uuid, String url, String author, String title, String text, String published, String language) {
 		this.uuid = uuid;
 		this.url = url;
@@ -62,7 +64,35 @@ public class Article {
 		return Objects.hash(uuid);
 	}
 
-	public void addCategory(String category) {
-		this.categories.add(category);
+	public void setUuid(String uuid) {
+		this.uuid = uuid;
+	}
+
+	public void setUrl(String url) {
+		this.url = url;
+	}
+
+	public void setAuthor(String author) {
+		this.author = author;
+	}
+
+	public void setTitle(String title) {
+		this.title = title;
+	}
+
+	public void setText(String text) {
+		this.text = text;
+	}
+
+	public void setPublished(String published) {
+		this.published = published;
+	}
+
+	public void setLanguage(String language) {
+		this.language = language;
+	}
+
+	public void setCategories(Set<String> categories) {
+		this.categories = categories;
 	}
 }

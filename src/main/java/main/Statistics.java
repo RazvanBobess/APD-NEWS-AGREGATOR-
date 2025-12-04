@@ -1,21 +1,23 @@
 package main;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Statistics {
-	private static final SimpleDateFormat date_format = new SimpleDateFormat("yyyy-MM-ddTHH:mm:ssZ");
-
 	private final AtomicInteger duplicates_found;
 	private final AtomicInteger unique_articles;
 
 	public Map<String, Integer> authors;
 
-	public Set<Article> duplicated_articles;
-	public Set<Article> unique_articles_list;
+	// daca e duplicat, adaug un contor care verifica daca am gasit un dup sau nu
+
+	public final Map<Article, Integer> articles_received;
 
 	private final Map<String, String> seen_titles;
 
@@ -32,8 +34,7 @@ public class Statistics {
 		english_linking_words = ConcurrentHashMap.newKeySet();
 		top_keyword_en = new ConcurrentHashMap<>();
 
-		duplicated_articles = ConcurrentHashMap.newKeySet();
-		unique_articles_list = ConcurrentHashMap.newKeySet();
+		articles_received = new ConcurrentHashMap<>();
 		seen_titles = new ConcurrentHashMap<>();
 
 		categories_list = new ConcurrentHashMap<>();
@@ -71,45 +72,48 @@ public class Statistics {
 		get_duplicates_found().incrementAndGet();
 	}
 
-	public Set<Article> get_dupl_articles() {
-		return duplicated_articles;
-	}
-
-	public Set<Article> get_unique_articles_list() {
-		return unique_articles_list;
+	public Map<Article, Integer> get_articles_received() {
+		return articles_received;
 	}
 
 	public Map<String, String> get_seen_titles() {
 		return seen_titles;
 	}
 
-	public String found_match(Article article) {
-		if (get_dupl_articles().contains(article))
-			return article.uuid;
+	public Article get_article_by_uuid(String uuid) {
+		Set<Article> aux_set = get_articles_received().keySet();
 
-		if (get_unique_articles_list().contains(article))
-			return article.uuid;
+		return aux_set.stream().filter(art -> art.getUuid().equals(uuid)).findFirst().orElse(null);
+	}
+
+	public Article found_match(Article article) {
+		if (get_articles_received().containsKey(article)) {
+			return article;
+		}
 
 		String aux = get_seen_titles().get(article.title);
-		if (aux != null) return aux;
+		Article aux_article = get_articles_received().keySet().stream().filter(art -> art.getUuid().equals(aux)).findFirst().orElse(null);
+		if (aux_article != null) return aux_article;
 
 		return null;
 	}
 
 	public boolean check_if_duplicated(Article article) {
-		String aux = found_match(article);
+		Article aux = found_match(article);
 
 		if (aux != null) {
-			if (!get_dupl_articles().contains(article)) {
-				get_dupl_articles().add(article);
+			if (get_articles_received().get(aux) == 1) {
+				get_articles_received().put(aux, 2);
+				add_duplicates_found();
 				get_unique_articles().decrementAndGet();
-				get_unique_articles_list().remove(article);
+			} else {
+				get_articles_received().put(aux, get_articles_received().get(aux) + 1);
 			}
 			add_duplicates_found();
 			return true;
 		}
 
-		get_unique_articles_list().add(article);
+		get_articles_received().put(article, 1);
 		get_unique_articles().incrementAndGet();
 		get_seen_titles().put(article.title, article.uuid);
 		return false;
@@ -127,16 +131,21 @@ public class Statistics {
 		get_categories().putIfAbsent(category, ConcurrentHashMap.newKeySet());
 	}
 
-	public void add_article_to_category(Article article) {
-		if (check_if_duplicated(article)) {
-			for (String category : article.categories) {
-				if (!get_categories().containsKey(category)) continue;
+	public void remove_article_from_category(Article article) {
+		Article aux_article = found_match(article);
 
-				String aux_uuid = found_match(article);
-				get_categories().get(category).remove(aux_uuid);
-			}
-			return;
+		if (aux_article == null) return;
+
+		if (get_articles_received().get(aux_article) > 2) return;
+
+		for (String category : aux_article.categories) {
+			if (!get_categories().containsKey(category)) continue;
+			get_categories().get(category).remove(aux_article.getUuid());
 		}
+	}
+
+	public void add_article_to_category(Article article) {
+		if (get_articles_received().get(article) >= 2) return;
 
 		for (String category : article.categories) {
 			if (!get_categories().containsKey(category)) continue;
@@ -144,23 +153,25 @@ public class Statistics {
 		}
 	}
 
-	public void normalize_category(String category) {
+	public String normalize_category(String category) {
 		category.replaceAll(" ", "_");
 		category.replaceAll(",", "");
+
+		return category;
 	}
 
 	public void print_categories() {
 		for (String category : get_categories().keySet()) {
 			if (get_categories().get(category).isEmpty()) continue;
 
-			normalize_category(category);
+			category = normalize_category(category);
 
-			String new_filepath = category + ".txt";
+			Path path = Paths.get(category + ".txt");
 
 			List<String> aux_list = new ArrayList<>(get_categories().get(category));
 			aux_list.sort(Comparator.naturalOrder());
 
-			try (BufferedWriter bw = new BufferedWriter(new FileWriter(new_filepath))) {
+			try (BufferedWriter bw = Files.newBufferedWriter(path)) {
 				for (String uuid : aux_list) {
 					bw.write(uuid + "\n");
 				}
@@ -171,6 +182,7 @@ public class Statistics {
 	}
 
 	public void add_categories(String file_path) {
+		logPath(file_path);
 		try (BufferedReader br = new BufferedReader(new FileReader(file_path))) {
 			int lines = Integer.parseInt(br.readLine());
 			for (int i = 0; i < lines; i++) {
@@ -194,13 +206,22 @@ public class Statistics {
 		get_languages().putIfAbsent(language, ConcurrentHashMap.newKeySet());
 	}
 
-	public void add_article_to_language(Article article) {
-		if (check_if_duplicated(article)) {
-			if (!get_languages().containsKey(article.language)) return;
+	public void remove_article_from_language(Article article) {
+		Article aux_article = found_match(article);
 
-			String aux_uuid = found_match(article);
-			get_languages().get(article.language).remove(aux_uuid);
+		if (aux_article == null) {
+			logPath("No article found for " + article.getUuid());
+			return;
 		}
+
+		if (get_articles_received().get(aux_article) > 2) return;
+
+		if (!get_languages().containsKey(article.language)) return;
+		get_languages().get(article.language).remove(aux_article.getUuid());
+	}
+
+	public void add_article_to_language(Article article) {
+		if (get_articles_received().get(article) >= 2) return;
 
 		if (!get_languages().containsKey(article.language)) return;
 		get_languages().get(article.language).add(article.getUuid());
@@ -210,12 +231,12 @@ public class Statistics {
 		for (String language : get_languages().keySet()) {
 			if (get_languages().get(language).isEmpty()) continue;
 
-			String new_filepath = language + ".txt";
-
 			List<String> aux_list = new ArrayList<>(get_languages().get(language));
 			aux_list.sort(Comparator.naturalOrder());
 
-			try (BufferedWriter bw = new BufferedWriter(new FileWriter(new_filepath))) {
+			Path path = Paths.get(language + ".txt");
+
+			try (BufferedWriter bw = Files.newBufferedWriter(path)) {
 				for (String uuid : aux_list) {
 					bw.write(uuid + "\n");
 				}
@@ -226,6 +247,7 @@ public class Statistics {
 	}
 
 	public void add_languages(String file_path) {
+		logPath(file_path);
 		try (BufferedReader br = new BufferedReader(new FileReader(file_path))) {
 			int count = Integer.parseInt(br.readLine());
 			String line;
@@ -247,8 +269,20 @@ public class Statistics {
 		return most_recent_articles;
 	}
 
-	public void update_most_recent_article(Article article) {
-		get_recent_articles().put(date_format.format(article.getPublished()), article.getUuid());
+	public void remove_article_from_recent_articles(Article article) {
+		Article aux_article = found_match(article);
+
+		if (aux_article == null) return;
+
+		if (get_articles_received().get(aux_article) > 2) return;
+
+		get_recent_articles().remove(aux_article.getPublished());
+	}
+
+	public void add_most_recent_article(Article article) {
+		if (get_articles_received().get(article) >= 2) return;
+
+		get_recent_articles().put(article.getPublished(), article.getUuid());
 	}
 
 	public List<Map.Entry<String, String>> sort_recent_articles_list() {
@@ -272,8 +306,9 @@ public class Statistics {
 		List<Map.Entry<String, String>> aux_list = sort_recent_articles_list();
 
 		String filepath = "all_articles.txt";
+		Path path = Paths.get(filepath);
 
-		try (BufferedWriter bw = new BufferedWriter(new FileWriter(filepath))) {
+		try (BufferedWriter bw = Files.newBufferedWriter(path)) {
 			for (Map.Entry<String, String> entry : aux_list) {
 				bw.write(entry.getValue() + " " + entry.getKey() + "\n");
 			}
@@ -294,6 +329,7 @@ public class Statistics {
 	}
 
 	public void read_linking_words(String filepath) {
+		logPath(filepath);
 		try (BufferedReader br = new BufferedReader(new FileReader(filepath))) {
 			int count = Integer.parseInt(br.readLine());
 			String line;
@@ -322,7 +358,30 @@ public class Statistics {
 		get_top_keyword_en().put(word, get_top_keyword_en().getOrDefault(word, 0) + 1);
 	}
 
+	public void remove_article_top_keyword(Article article) {
+		Article aux_article = found_match(article);
+
+		if (aux_article == null) return;
+
+		if (!aux_article.language.equals("english")) return;
+
+		if (get_articles_received().get(aux_article) > 2) return;
+
+		String text = aux_article.text.toLowerCase();
+		String []tokens = text.split(" ");
+
+		for (String token : tokens) {
+			String word = token.replaceAll("[^a-z]", "");
+
+			if (!word.isEmpty()) {
+				get_top_keyword_en().put(word, get_top_keyword_en().getOrDefault(word, 0) - 1);
+			}
+		}
+	}
+
 	public void add_article_top_keyword(Article article) {
+		if (get_articles_received().get(article) >= 2) return;
+
 		if (!article.language.equals("english")) {
 			return;
 		}
@@ -358,9 +417,11 @@ public class Statistics {
 		List<Map.Entry<String, Integer>> aux_list = sort_top_keyword_en_list();
 
 		String filepath = "keywords_count.txt";
+		Path path = Paths.get(filepath);
 
-		try (BufferedWriter bw = new BufferedWriter(new FileWriter(filepath))) {
+		try (BufferedWriter bw = Files.newBufferedWriter(path)) {
 			for (Map.Entry<String, Integer> aux : aux_list) {
+				if (aux.getValue() < 1) continue;
 				bw.write(aux.getKey() + " " + aux.getValue() + "\n");
 			}
 		} catch (IOException e) {
@@ -381,8 +442,9 @@ public class Statistics {
 	}
 
 	public void update_authors() {
-		for (Article article : get_unique_articles_list()) {
-			add_authors(article.getAuthor());
+		for (Map.Entry<Article, Integer> entry : get_articles_received().entrySet()) {
+			if (entry.getValue() > 1) continue;
+			add_authors(entry.getKey().author);
 		}
 	}
 
@@ -436,20 +498,24 @@ public class Statistics {
 
 	public void print_reports() {
 		String filepath = "reports.txt";
+		Path path = Paths.get(filepath);
 
 		Map.Entry<String, Integer> max_entry = get_max_authors();
 		Map.Entry<String, Integer> top_lang = get_top_language();
 		Map.Entry<String, Integer> top_cat = get_top_category();
 		Map.Entry<String, String> most_recent = sort_recent_articles_list().getFirst();
+
+		Article recent_article = get_article_by_uuid(most_recent.getValue());
+
 		Map.Entry<String, Integer> top_keyword_en = sort_top_keyword_en_list().getFirst();
 
-		try (BufferedWriter bw = new BufferedWriter(new FileWriter(filepath))) {
+		try (BufferedWriter bw = Files.newBufferedWriter(path)) {
 			bw.write("duplicates_found - " + get_duplicates_found() + "\n");
 			bw.write("unique_articles - " + get_unique_articles() + "\n");
 			bw.write("best_author - " + max_entry.getKey() + " " + max_entry.getValue() + "\n");
-			bw.write("top_languages - " + top_lang.getKey() + " " + top_lang.getValue() + "\n");
-			bw.write("top_category - " + top_cat.getKey() + " " + top_cat.getValue() + "\n");
-			bw.write("most_recent_article - " + most_recent.getKey() + " " + most_recent.getValue() + "\n");
+			bw.write("top_language - " + top_lang.getKey() + " " + top_lang.getValue() + "\n");
+			bw.write("top_category - " + normalize_category(top_cat.getKey()) + " " + top_cat.getValue() + "\n");
+			bw.write("most_recent_article - " + most_recent.getKey() + " " + recent_article.getUrl() + "\n");
 			bw.write("top_keyword_en - " + top_keyword_en.getKey() + " " + top_keyword_en.getValue() + "\n");
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -459,7 +525,16 @@ public class Statistics {
 	// This part is for parsing the input file, which contains all the paths
 	// to the files of interest
 
+	private String extract_file_path(String line) {
+		String[] tokens = line.split(" ");
+		return tokens[tokens.length - 1];
+	}
+
 	public void parse_file(String file_path) {
+		logPath(file_path);
+
+		Path base_dir = Paths.get(file_path).getParent();
+
 		try (BufferedReader br = new BufferedReader(new FileReader(file_path))) {
 			int count = Integer.parseInt(br.readLine());
 
@@ -469,15 +544,35 @@ public class Statistics {
 				line = br.readLine();
 
 				if (line.contains("languages")) {
-					add_languages(line);
+					String relative_path = extract_file_path(line);
+					String abs_path = base_dir.resolve(relative_path).toString();
+					add_languages(abs_path);
 				} else if (line.contains("categories")) {
-					add_categories(line);
+					String relative_path = extract_file_path(line);
+					String abs_path = base_dir.resolve(relative_path).toString();
+					add_categories(abs_path);
 				} else if (line.contains("english_linking_words")) {
-					read_linking_words(line);
+					String relative_path = extract_file_path(line);
+					String abs_path = base_dir.resolve(relative_path).toString();
+					read_linking_words(abs_path);
 				}
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
+		}
+	}
+
+	public static final String PATH_TO_LOG = System.getProperty("user.dir") + "/logs.log";
+	private final Object lock = new Object();
+
+	public void logPath(String path) {
+		synchronized (lock) {
+			try (BufferedWriter bw = new BufferedWriter(new FileWriter(PATH_TO_LOG, true))) {
+				bw.write(path);
+				bw.newLine();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 	}
 }
