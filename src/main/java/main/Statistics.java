@@ -4,7 +4,6 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -27,7 +26,7 @@ public class Statistics {
 	private final Set<String> english_linking_words;
 	private final Map<String, Integer> top_keyword_en;
 
-	public static volatile Statistics instance;
+	public static Statistics instance;
 
 	private Statistics() {
 		most_recent_articles = new ConcurrentHashMap<>();
@@ -154,8 +153,8 @@ public class Statistics {
 	}
 
 	public String normalize_category(String category) {
-		category.replaceAll(" ", "_");
-		category.replaceAll(",", "");
+		category = category.replaceAll(" ", "_");
+		category = category.replaceAll(",", "");
 
 		return category;
 	}
@@ -164,9 +163,9 @@ public class Statistics {
 		for (String category : get_categories().keySet()) {
 			if (get_categories().get(category).isEmpty()) continue;
 
-			category = normalize_category(category);
+			String output_category = normalize_category(category);
 
-			Path path = Paths.get(category + ".txt");
+			Path path = Paths.get(output_category + ".txt");
 
 			List<String> aux_list = new ArrayList<>(get_categories().get(category));
 			aux_list.sort(Comparator.naturalOrder());
