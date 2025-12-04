@@ -45,7 +45,6 @@ public class Main {
 		String inputs_txt = args[2];
 
 		ArrayList<String> articles_content = new ArrayList<>();
-		statistics.logPath(articles_txt);
 		process_file(articles_txt, articles_content);
 
 		statistics.parse_file(inputs_txt);

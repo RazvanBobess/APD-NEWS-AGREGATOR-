@@ -1,7 +1,6 @@
 package main;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
@@ -31,6 +30,10 @@ public class MyThread extends Thread{
 			int start = id * articles_list.size() / P;
 			int end = (id + 1) * articles_list.size() / P;
 
+			if (end > articles_list.size()) {
+				end = articles_list.size();
+			}
+
 			ObjectMapper mapper = new ObjectMapper();
 
 			for (int i = start; i < end; i++) {
@@ -47,31 +50,26 @@ public class MyThread extends Thread{
 						instance.remove_article_from_language(article);
 						instance.remove_article_from_recent_articles(article);
 						instance.remove_article_top_keyword(article);
-						instance.logPath(article.toString());
-
 					} else {
 						instance.add_article_to_category(article);
 						instance.add_article_to_language(article);
 						instance.add_most_recent_article(article);
 						instance.add_article_top_keyword(article);
-						instance.logPath(article.toString());
 					}
 
 				}
 			}
-
 			barrier.await();
 
 			if (id == 0) {
 				instance.print_categories();
 				instance.print_languages();
-				instance.print_reports();
 				instance.print_most_recent_articles();
 				instance.print_top_keyword_en();
+				instance.print_reports();
 			}
 		} catch (InterruptedException | BrokenBarrierException e) {
 			e.printStackTrace();
-			instance.logPath("Thread " + id + " failed: " + e.getMessage());
 		}
 	}
 }

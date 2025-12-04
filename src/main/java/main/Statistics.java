@@ -14,8 +14,6 @@ public class Statistics {
 
 	public Map<String, Integer> authors;
 
-	// daca e duplicat, adaug un contor care verifica daca am gasit un dup sau nu
-
 	public final Map<Article, Integer> articles_received;
 
 	private final Map<String, String> seen_titles;
@@ -92,9 +90,8 @@ public class Statistics {
 
 		String aux = get_seen_titles().get(article.title);
 		Article aux_article = get_articles_received().keySet().stream().filter(art -> art.getUuid().equals(aux)).findFirst().orElse(null);
-		if (aux_article != null) return aux_article;
 
-		return null;
+		return aux_article;
 	}
 
 	public boolean check_if_duplicated(Article article) {
@@ -126,11 +123,11 @@ public class Statistics {
 		return categories_list;
 	}
 
-	public void update_categories(String category) {
+	public synchronized void update_categories(String category) {
 		get_categories().putIfAbsent(category, ConcurrentHashMap.newKeySet());
 	}
 
-	public void remove_article_from_category(Article article) {
+	public synchronized void remove_article_from_category(Article article) {
 		Article aux_article = found_match(article);
 
 		if (aux_article == null) return;
@@ -143,7 +140,7 @@ public class Statistics {
 		}
 	}
 
-	public void add_article_to_category(Article article) {
+	public synchronized void add_article_to_category(Article article) {
 		if (get_articles_received().get(article) >= 2) return;
 
 		for (String category : article.categories) {
@@ -181,7 +178,6 @@ public class Statistics {
 	}
 
 	public void add_categories(String file_path) {
-		logPath(file_path);
 		try (BufferedReader br = new BufferedReader(new FileReader(file_path))) {
 			int lines = Integer.parseInt(br.readLine());
 			for (int i = 0; i < lines; i++) {
@@ -201,15 +197,14 @@ public class Statistics {
 		return languages_list;
 	}
 
-	public void update_languages(String language) {
+	public synchronized void update_languages(String language) {
 		get_languages().putIfAbsent(language, ConcurrentHashMap.newKeySet());
 	}
 
-	public void remove_article_from_language(Article article) {
+	public synchronized void remove_article_from_language(Article article) {
 		Article aux_article = found_match(article);
 
 		if (aux_article == null) {
-			logPath("No article found for " + article.getUuid());
 			return;
 		}
 
@@ -219,7 +214,7 @@ public class Statistics {
 		get_languages().get(article.language).remove(aux_article.getUuid());
 	}
 
-	public void add_article_to_language(Article article) {
+	public synchronized void add_article_to_language(Article article) {
 		if (get_articles_received().get(article) >= 2) return;
 
 		if (!get_languages().containsKey(article.language)) return;
@@ -246,7 +241,6 @@ public class Statistics {
 	}
 
 	public void add_languages(String file_path) {
-		logPath(file_path);
 		try (BufferedReader br = new BufferedReader(new FileReader(file_path))) {
 			int count = Integer.parseInt(br.readLine());
 			String line;
@@ -268,20 +262,24 @@ public class Statistics {
 		return most_recent_articles;
 	}
 
-	public void remove_article_from_recent_articles(Article article) {
+	public synchronized void remove_article_from_recent_articles(Article article) {
 		Article aux_article = found_match(article);
-
 		if (aux_article == null) return;
 
-		if (get_articles_received().get(aux_article) > 2) return;
+		int count = get_articles_received().get(aux_article);
 
-		get_recent_articles().remove(aux_article.getPublished());
+		if (count >= 2) {
+			get_recent_articles().remove(aux_article.getPublished());
+		}
 	}
 
-	public void add_most_recent_article(Article article) {
-		if (get_articles_received().get(article) >= 2) return;
+	public synchronized void add_most_recent_article(Article article) {
+		int count = get_articles_received().get(article);
 
-		get_recent_articles().put(article.getPublished(), article.getUuid());
+		if (count == 1) {
+			get_recent_articles().put(article.getPublished(), article.getUuid());
+		}
+
 	}
 
 	public List<Map.Entry<String, String>> sort_recent_articles_list() {
@@ -328,7 +326,6 @@ public class Statistics {
 	}
 
 	public void read_linking_words(String filepath) {
-		logPath(filepath);
 		try (BufferedReader br = new BufferedReader(new FileReader(filepath))) {
 			int count = Integer.parseInt(br.readLine());
 			String line;
@@ -350,14 +347,26 @@ public class Statistics {
 		return top_keyword_en;
 	}
 
-	public void update_top_keyword_en(String word) {
+	public synchronized void update_top_keyword_en(String word) {
 		if (check_linking_word(word))
 			return;
 
 		get_top_keyword_en().put(word, get_top_keyword_en().getOrDefault(word, 0) + 1);
 	}
 
-	public void remove_article_top_keyword(Article article) {
+	public Set<String> parse_text(String text) {
+		String []tokens = text.split(" ");
+		Set<String> words = new HashSet<>();
+
+		for (String token : tokens) {
+			String word = token.replaceAll("[^a-z]", "");
+			if (!word.isEmpty()) words.add(word);
+		}
+
+		return words;
+	}
+
+	public synchronized void remove_article_top_keyword(Article article) {
 		Article aux_article = found_match(article);
 
 		if (aux_article == null) return;
@@ -366,34 +375,28 @@ public class Statistics {
 
 		if (get_articles_received().get(aux_article) > 2) return;
 
-		String text = aux_article.text.toLowerCase();
-		String []tokens = text.split(" ");
+		Set<String> aux_tokens = parse_text(aux_article.text.toLowerCase());
 
-		for (String token : tokens) {
-			String word = token.replaceAll("[^a-z]", "");
+		for (String token : aux_tokens) {
+			if (check_linking_word(token)) continue;
 
-			if (!word.isEmpty()) {
-				get_top_keyword_en().put(word, get_top_keyword_en().getOrDefault(word, 0) - 1);
+			if (get_top_keyword_en().containsKey(token)) {
+				get_top_keyword_en().put(token, get_top_keyword_en().get(token) - 1);
 			}
 		}
 	}
 
-	public void add_article_top_keyword(Article article) {
+	public synchronized void add_article_top_keyword(Article article) {
 		if (get_articles_received().get(article) >= 2) return;
 
 		if (!article.language.equals("english")) {
 			return;
 		}
 
-		String text = article.text.toLowerCase();
-		String []tokens = text.split(" ");
+		Set<String> aux_tokens = parse_text(article.text.toLowerCase());
 
-		for (String token : tokens) {
-			String word = token.replaceAll("[^a-z]", "");
-
-			if (!word.isEmpty()) {
-				update_top_keyword_en(word);
-			}
+		for (String token : aux_tokens) {
+			update_top_keyword_en(token);
 		}
 	}
 
@@ -530,8 +533,6 @@ public class Statistics {
 	}
 
 	public void parse_file(String file_path) {
-		logPath(file_path);
-
 		Path base_dir = Paths.get(file_path).getParent();
 
 		try (BufferedReader br = new BufferedReader(new FileReader(file_path))) {
@@ -558,20 +559,6 @@ public class Statistics {
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
-		}
-	}
-
-	public static final String PATH_TO_LOG = System.getProperty("user.dir") + "/logs.log";
-	private final Object lock = new Object();
-
-	public void logPath(String path) {
-		synchronized (lock) {
-			try (BufferedWriter bw = new BufferedWriter(new FileWriter(PATH_TO_LOG, true))) {
-				bw.write(path);
-				bw.newLine();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
 		}
 	}
 }
