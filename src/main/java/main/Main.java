@@ -38,7 +38,7 @@ public class Main {
 			System.exit(1);
 		}
 
-		Statistics statistics = Statistics.getInstance();
+		Statistics statistics = new Statistics();
 
 		P = Integer.parseInt(args[0]);
 		String articles_txt = args[1];

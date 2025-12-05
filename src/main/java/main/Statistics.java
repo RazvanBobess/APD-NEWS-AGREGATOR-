@@ -9,25 +9,28 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Statistics {
-	private final AtomicInteger duplicates_found;
-	private final AtomicInteger unique_articles;
+	public final AtomicInteger duplicates_found;
+	public final AtomicInteger unique_articles;
 
+	public final Map<String, Article> articles_received;
+
+	public final Map<String, String> seen_titles;
+	public final Map<String, Article> seen_uuids;
+
+	public final List<String> valid_categories;
+	public final List<String> valid_languages;
+
+	public final Map<String, Set<String>> categories_list;
+	public final Map<String, Set<String>> languages_list;
+	public final Map<String, Integer> top_keyword_en;
 	public Map<String, Integer> authors;
 
-	public final Map<Article, Integer> articles_received;
+	public final Map<String, String> most_recent_articles;
+	public final Set<String> english_linking_words;
 
-	private final Map<String, String> seen_titles;
-	private final Map<String, Article> seen_uuids;
+	public Statistics instance;
 
-	private final Map<String, Set<String>> categories_list;
-	private final Map<String, Set<String>> languages_list;
-	private final Map<String, String> most_recent_articles;
-	private final Set<String> english_linking_words;
-	private final Map<String, Integer> top_keyword_en;
-
-	public static Statistics instance;
-
-	private Statistics() {
+	public Statistics() {
 		most_recent_articles = new ConcurrentHashMap<>();
 		english_linking_words = ConcurrentHashMap.newKeySet();
 		top_keyword_en = new ConcurrentHashMap<>();
@@ -37,7 +40,10 @@ public class Statistics {
 		seen_uuids = new ConcurrentHashMap<>();
 
 		categories_list = new ConcurrentHashMap<>();
+		valid_categories = new ArrayList<>();
+
 		languages_list = new ConcurrentHashMap<>();
+		valid_languages = new ArrayList<>();
 
 		duplicates_found = new AtomicInteger(0);
 		unique_articles = new AtomicInteger(0);
@@ -45,67 +51,58 @@ public class Statistics {
 		authors = new ConcurrentHashMap<>();
 	}
 
-	public static Statistics getInstance() {
-		if (instance == null) {
-			instance = new Statistics();
-		}
-		return instance;
+	public synchronized void merge_all_articles(Map<String, Article> aux_articles_list) {
+		articles_received.putAll(aux_articles_list);
 	}
 
-	public Article found_match(Article article) {
-		if (articles_received.containsKey(article)) {
-			return article;
-		}
-
-		String aux = seen_titles.get(article.title);
-		if (aux == null) return null;
-
-		return seen_uuids.get(aux);
-	}
-
-	public synchronized boolean check_if_duplicated(Article article) {
-		Article aux = found_match(article);
-
-		if (aux != null) {
-			if (articles_received.get(aux) == 1) {
-				articles_received.put(aux, 2);
-				duplicates_found.incrementAndGet();
-				unique_articles.decrementAndGet();
-			} else {
-				articles_received.put(aux, articles_received.get(aux) + 1);
-			}
-			duplicates_found.incrementAndGet();
-			return true;
-		}
-
-		articles_received.put(article, 1);
-		unique_articles.incrementAndGet();
-		seen_titles.put(article.title, article.uuid);
-		seen_uuids.put(article.uuid, article);
-		return false;
-	}
-
-	public synchronized void add_article_to_category(Article article) {
-		if (articles_received.get(article) >= 2) return;
-
-		for (String category : article.categories) {
-			if (!categories_list.containsKey(category)) continue;
-			categories_list.get(category).add(article.getUuid());
+	public synchronized void merge_threads_categories(Map<String, Set<String>> categories_aux_list) {
+		for (Map.Entry<String, Set<String>> entry : categories_aux_list.entrySet()) {
+			this.categories_list.merge(entry.getKey(), entry.getValue(), (set1, set2) -> {
+				set1.addAll(set2);
+				return set1;
+			});
 		}
 	}
 
-	public String normalize_category(String category) {
-		category = category.replaceAll(" ", "_");
-		category = category.replaceAll(",", "");
+	public synchronized void merge_threads_languages(Map<String, Set<String>> languages_aux_list) {
+		for (Map.Entry<String, Set<String>> entry : languages_aux_list.entrySet()) {
+			this.languages_list.merge(entry.getKey(), entry.getValue(), (set1, set2) -> {
+				set1.addAll(set2);
+				return set1;
+			});
+		}
+	}
 
-		return category;
+	public synchronized void merge_threads_keywords(Map<String, Integer> keywords_aux_list) {
+		for (Map.Entry<String, Integer> entry : keywords_aux_list.entrySet()) {
+			this.top_keyword_en.merge(entry.getKey(), entry.getValue(), Integer::sum);
+		}
+	}
+
+	public synchronized void merge_threads_recent_articles(Map<String, String> most_aux_recent_list) {
+		this.most_recent_articles.putAll(most_aux_recent_list);
+	}
+
+	public synchronized void merge_threads_authors(Map<String, Integer> authors_aux_list) {
+		for (Map.Entry<String, Integer> entry : authors_aux_list.entrySet()) {
+			this.authors.merge(entry.getKey(), entry.getValue(), Integer::sum);
+		}
+	}
+
+	public void set_unique_articles(AtomicInteger unique_articles) {
+		this.unique_articles.set(unique_articles.get());
+	}
+
+	public void set_duplicates_found(AtomicInteger duplicates_found) {
+		this.duplicates_found.set(duplicates_found.get());
 	}
 
 	public void print_categories() {
 		for (String category : categories_list.keySet()) {
 			if (categories_list.get(category).isEmpty()) continue;
 
-			String output_category = normalize_category(category);
+			String output_category = category.replaceAll(" ", "_");
+			output_category = output_category.replaceAll(",", "");
 
 			Path path = Paths.get(output_category + ".txt");
 
@@ -120,25 +117,6 @@ public class Statistics {
 				e.printStackTrace();
 			}
 		}
-	}
-
-	public void add_categories(String file_path) {
-		try (BufferedReader br = new BufferedReader(new FileReader(file_path))) {
-			int lines = Integer.parseInt(br.readLine());
-			for (int i = 0; i < lines; i++) {
-				String line = br.readLine();
-				categories_list.putIfAbsent(line, ConcurrentHashMap.newKeySet());
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
-
-	public synchronized void add_article_to_language(Article article) {
-		if (articles_received.get(article) >= 2) return;
-
-		if (!languages_list.containsKey(article.language)) return;
-		languages_list.get(article.language).add(article.getUuid());
 	}
 
 	public void print_languages() {
@@ -160,44 +138,6 @@ public class Statistics {
 		}
 	}
 
-	public void add_languages(String file_path) {
-		try (BufferedReader br = new BufferedReader(new FileReader(file_path))) {
-			int count = Integer.parseInt(br.readLine());
-			String line;
-
-			for (int i = 0; i < count; i++) {
-				line = br.readLine();
-				languages_list.putIfAbsent(line, ConcurrentHashMap.newKeySet());
-			}
-
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
-
-	public synchronized void add_most_recent_article(Article article) {
-		int count = articles_received.get(article);
-
-		if (count == 1) {
-			most_recent_articles.put(article.getUuid(), article.getPublished());
-		}
-	}
-
-	public List<Map.Entry<String, String>> sort_recent_articles_list() {
-		List<Map.Entry<String, String>> sort_list = new ArrayList<>(most_recent_articles.entrySet());
-		sort_list.sort((entry1, entry2) -> {
-			int dateComp = entry2.getValue().compareTo(entry1.getValue());
-
-			if (dateComp != 0) {
-				return dateComp;
-			}
-
-			return entry1.getKey().compareTo(entry2.getKey());
-		});
-
-		return sort_list;
-	}
-
 	public void print_most_recent_articles() {
 		if (most_recent_articles.isEmpty()) return;
 
@@ -212,47 +152,6 @@ public class Statistics {
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
-		}
-	}
-
-	public void read_linking_words(String filepath) {
-		try (BufferedReader br = new BufferedReader(new FileReader(filepath))) {
-			int count = Integer.parseInt(br.readLine());
-			String line;
-
-			for (int i = 0; i < count; i++) {
-				line = br.readLine();
-				english_linking_words.add(line);
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
-
-	public Set<String> parse_text(String text) {
-		String []tokens = text.split(" ");
-		Set<String> words = new HashSet<>();
-
-		for (String token : tokens) {
-			String word = token.replaceAll("[^a-z]", "");
-			if (!word.isEmpty()) words.add(word);
-		}
-
-		return words;
-	}
-
-	public synchronized void add_article_top_keyword(Article article) {
-		if (articles_received.get(article) >= 2) return;
-
-		if (!article.language.equals("english")) {
-			return;
-		}
-
-		Set<String> aux_tokens = parse_text(article.text.toLowerCase());
-
-		for (String token : aux_tokens) {
-			if (english_linking_words.contains(token)) continue;
-			top_keyword_en.put(token, top_keyword_en.getOrDefault(token, 0) + 1);
 		}
 	}
 
@@ -285,27 +184,79 @@ public class Statistics {
 		}
 	}
 
-	public void add_authors(String author) {
-		if (!authors.containsKey(author)) {
-			authors.put(author, 1);
-		} else {
-			int count = authors.get(author);
-			count++;
-			authors.put(author, count);
+	public void add_categories(String file_path) {
+		try (BufferedReader br = new BufferedReader(new FileReader(file_path))) {
+			int lines = Integer.parseInt(br.readLine());
+			for (int i = 0; i < lines; i++) {
+				String line = br.readLine();
+				categories_list.putIfAbsent(line, ConcurrentHashMap.newKeySet());
+				valid_categories.add(line);
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
 	}
 
-	public void update_authors() {
-		for (Map.Entry<Article, Integer> entry : articles_received.entrySet()) {
-			if (entry.getValue() > 1) continue;
-			add_authors(entry.getKey().author);
+	public void add_languages(String file_path) {
+		try (BufferedReader br = new BufferedReader(new FileReader(file_path))) {
+			int count = Integer.parseInt(br.readLine());
+			String line;
+
+			for (int i = 0; i < count; i++) {
+				line = br.readLine();
+				languages_list.putIfAbsent(line, ConcurrentHashMap.newKeySet());
+				valid_languages.add(line);
+			}
+
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
+	}
+
+	public void read_linking_words(String filepath) {
+		try (BufferedReader br = new BufferedReader(new FileReader(filepath))) {
+			int count = Integer.parseInt(br.readLine());
+			String line;
+
+			for (int i = 0; i < count; i++) {
+				line = br.readLine();
+				english_linking_words.add(line);
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public List<Map.Entry<String, String>> sort_recent_articles_list() {
+		List<Map.Entry<String, String>> sort_list = new ArrayList<>(most_recent_articles.entrySet());
+		sort_list.sort((entry1, entry2) -> {
+			int dateComp = entry2.getValue().compareTo(entry1.getValue());
+
+			if (dateComp != 0) {
+				return dateComp;
+			}
+
+			return entry1.getKey().compareTo(entry2.getKey());
+		});
+
+		return sort_list;
+	}
+
+	public Set<String> parse_text(String text) {
+		String []tokens = text.replaceAll("[^a-z\\s]", "").split("\\s+");
+		Set<String> words = new HashSet<>();
+
+		for (String token : tokens) {
+			if (!english_linking_words.contains(token) && !token.isBlank()) {
+				words.add(token);
+			}
+		}
+
+		return words;
 	}
 
 	public Map.Entry<String, Integer> get_max_authors() {
 		Map.Entry<String, Integer> max_entry = null;
-
-		update_authors();
 
 		for (Map.Entry<String, Integer> entry : authors.entrySet()) {
 			if (max_entry == null || entry.getValue() > max_entry.getValue()) {
@@ -356,18 +307,20 @@ public class Statistics {
 		Map.Entry<String, Integer> max_entry = get_max_authors();
 		Map.Entry<String, Integer> top_lang = get_top_language();
 		Map.Entry<String, Integer> top_cat = get_top_category();
+		Map.Entry<String, Integer> top_keyword_en = sort_top_keyword_en_list().getFirst();
 		Map.Entry<String, String> most_recent = sort_recent_articles_list().getFirst();
 
-		Article recent_article = seen_uuids.get(most_recent.getKey());
+		Article recent_article = articles_received.get(most_recent.getKey());
 
-		Map.Entry<String, Integer> top_keyword_en = sort_top_keyword_en_list().getFirst();
+		String output_category = top_cat.getKey().replaceAll(" ", "_");
+		output_category = output_category.replaceAll(",", "");
 
 		try (BufferedWriter bw = Files.newBufferedWriter(path)) {
 			bw.write("duplicates_found - " + duplicates_found + "\n");
 			bw.write("unique_articles - " + unique_articles + "\n");
 			bw.write("best_author - " + max_entry.getKey() + " " + max_entry.getValue() + "\n");
 			bw.write("top_language - " + top_lang.getKey() + " " + top_lang.getValue() + "\n");
-			bw.write("top_category - " + normalize_category(top_cat.getKey()) + " " + top_cat.getValue() + "\n");
+			bw.write("top_category - " + output_category + " " + top_cat.getValue() + "\n");
 			bw.write("most_recent_article - " + most_recent.getValue() + " " + recent_article.getUrl() + "\n");
 			bw.write("top_keyword_en - " + top_keyword_en.getKey() + " " + top_keyword_en.getValue() + "\n");
 		} catch (IOException e) {
