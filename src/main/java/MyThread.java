@@ -1,4 +1,3 @@
-package main;
 
 import java.io.File;
 import java.util.*;
@@ -8,7 +7,7 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.*;
+import tools.jackson.databind.ObjectMapper;
 
 public class MyThread extends Thread{
 	public int P;

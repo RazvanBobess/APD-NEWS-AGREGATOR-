@@ -1,14 +1,11 @@
-package main;
 
-import tools.jackson.databind.*;
-import tools.jackson.core.*;
 import java.io.*;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.concurrent.CyclicBarrier;
 
-public class Main {
+public class Tema1 {
 	// number of threads that will be used
 	private static int P;
 

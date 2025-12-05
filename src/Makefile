@@ -1,10 +1,11 @@
 .PHONY: build run clean
 
 build:
-	mvn compile
+	javac -cp "./jackson-core-3.0.0.jar:./jackson-databind-3.0.3.jar:./jackson-annotations-3.0-rc5.jar" ./main/java/*.java -d ../target
 
 run:
-	mvn exec:java -Dexec.mainClass="main.Main" -Dexec.args="$(ARGS)"
+	java -cp "./jackson-core-3.0.0.jar:./jackson-databind-3.0.3.jar:./jackson-annotations-3.0-rc5.jar:../target" Tema1 $(ARGS)
 
 clean:
-	mvn clean
+	rm -rf ../target
+	rm -rf *.txt
