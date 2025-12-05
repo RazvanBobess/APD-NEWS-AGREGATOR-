@@ -26,13 +26,13 @@ public class Statistics {
 	public Map<String, Integer> authors;
 
 	public final Map<String, String> most_recent_articles;
-	public final Set<String> english_linking_words;
+	public final List<String> english_linking_words;
 
 	public Statistics instance;
 
 	public Statistics() {
 		most_recent_articles = new ConcurrentHashMap<>();
-		english_linking_words = ConcurrentHashMap.newKeySet();
+		english_linking_words = new ArrayList<>();
 		top_keyword_en = new ConcurrentHashMap<>();
 
 		articles_received = new ConcurrentHashMap<>();
@@ -56,26 +56,38 @@ public class Statistics {
 	}
 
 	public synchronized void merge_threads_categories(Map<String, Set<String>> categories_aux_list) {
-		for (Map.Entry<String, Set<String>> entry : categories_aux_list.entrySet()) {
-			this.categories_list.merge(entry.getKey(), entry.getValue(), (set1, set2) -> {
-				set1.addAll(set2);
-				return set1;
-			});
+		for (String key : categories_aux_list.keySet()) {
+			if (!this.categories_list.containsKey(key)) {
+				this.categories_list.put(key, new HashSet<>());
+			}
+
+			Set<String> aux_set = this.categories_list.get(key);
+			for (String val : categories_aux_list.get(key)) {
+				aux_set.add(val);
+			}
 		}
 	}
 
 	public synchronized void merge_threads_languages(Map<String, Set<String>> languages_aux_list) {
-		for (Map.Entry<String, Set<String>> entry : languages_aux_list.entrySet()) {
-			this.languages_list.merge(entry.getKey(), entry.getValue(), (set1, set2) -> {
-				set1.addAll(set2);
-				return set1;
-			});
+		for (String key : languages_aux_list.keySet()) {
+			if (!this.languages_list.containsKey(key)) {
+				this.languages_list.put(key, new HashSet<>());
+			}
+			Set<String> aux_set = this.languages_list.get(key);
+			for (String val : languages_aux_list.get(key)) {
+				aux_set.add(val);
+			}
 		}
 	}
 
 	public synchronized void merge_threads_keywords(Map<String, Integer> keywords_aux_list) {
 		for (Map.Entry<String, Integer> entry : keywords_aux_list.entrySet()) {
-			this.top_keyword_en.merge(entry.getKey(), entry.getValue(), Integer::sum);
+			if (this.top_keyword_en.containsKey(entry.getKey())) {
+				int val = this.top_keyword_en.get(entry.getKey());
+				this.top_keyword_en.put(entry.getKey(), val + entry.getValue());
+			} else {
+				this.top_keyword_en.put(entry.getKey(), entry.getValue());
+			}
 		}
 	}
 
@@ -85,7 +97,12 @@ public class Statistics {
 
 	public synchronized void merge_threads_authors(Map<String, Integer> authors_aux_list) {
 		for (Map.Entry<String, Integer> entry : authors_aux_list.entrySet()) {
-			this.authors.merge(entry.getKey(), entry.getValue(), Integer::sum);
+			if (this.authors.containsKey(entry.getKey())) {
+				int val = this.authors.get(entry.getKey());
+				this.authors.put(entry.getKey(), val + entry.getValue());
+			} else {
+				this.authors.put(entry.getKey(), entry.getValue());
+			}
 		}
 	}
 

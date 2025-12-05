@@ -50,7 +50,7 @@ public class MyThread extends Thread{
 
 		categories_list = new HashMap<>();
 		languages_list = new HashMap<>();
-		keywords_list = new HashMap<>();
+		keywords_list = new TreeMap<>();
 		most_recent_articles = new HashMap<>();
 		authors_list = new HashMap<>();
 	}
@@ -69,7 +69,6 @@ public class MyThread extends Thread{
 	}
 
 	public boolean check_if_dup(Article article) {
-		// inseamna ca nu l-am adaugat fiindca era duplicatul altui articol (semana cu acel articol doar prin uuid sau title)
 		if (!seen_titles.containsKey(article.title) || !seen_uuids.containsKey(article.uuid)) return true;
 
 		if (seen_titles.get(article.title) > 1 || seen_uuids.get(article.uuid) > 1) return true;
@@ -83,8 +82,8 @@ public class MyThread extends Thread{
 			int start = id * articles_list.size() / P;
 			int end = (id + 1) * articles_list.size() / P;
 
-			ObjectMapper mapper = new ObjectMapper();
 			for (int i = start; i < end; i++) {
+				ObjectMapper mapper = new ObjectMapper();
 				File json = new File(articles_list.get(i));
 
 				List<Article> articles = mapper.readValue(json,
