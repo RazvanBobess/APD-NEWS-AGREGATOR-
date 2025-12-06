@@ -56,37 +56,25 @@ public class Statistics {
 
 	public synchronized void merge_threads_categories(Map<String, Set<String>> categories_aux_list) {
 		for (String key : categories_aux_list.keySet()) {
-			if (!this.categories_list.containsKey(key)) {
-				this.categories_list.put(key, new HashSet<>());
-			}
-
-			Set<String> aux_set = this.categories_list.get(key);
-			for (String val : categories_aux_list.get(key)) {
-				aux_set.add(val);
-			}
+			this.categories_list.merge(key, categories_aux_list.get(key), (set1, set2) -> {
+				set1.addAll(set2);
+				return set1;
+			});
 		}
 	}
 
 	public synchronized void merge_threads_languages(Map<String, Set<String>> languages_aux_list) {
 		for (String key : languages_aux_list.keySet()) {
-			if (!this.languages_list.containsKey(key)) {
-				this.languages_list.put(key, new HashSet<>());
-			}
-			Set<String> aux_set = this.languages_list.get(key);
-			for (String val : languages_aux_list.get(key)) {
-				aux_set.add(val);
-			}
+			this.languages_list.merge(key, languages_aux_list.get(key), (set1, set2) -> {
+				set1.addAll(set2);
+				return set1;
+			});
 		}
 	}
 
 	public synchronized void merge_threads_keywords(Map<String, Integer> keywords_aux_list) {
 		for (Map.Entry<String, Integer> entry : keywords_aux_list.entrySet()) {
-			if (this.top_keyword_en.containsKey(entry.getKey())) {
-				int val = this.top_keyword_en.get(entry.getKey());
-				this.top_keyword_en.put(entry.getKey(), val + entry.getValue());
-			} else {
-				this.top_keyword_en.put(entry.getKey(), entry.getValue());
-			}
+			this.top_keyword_en.merge(entry.getKey(), entry.getValue(), Integer::sum);
 		}
 	}
 
@@ -96,12 +84,7 @@ public class Statistics {
 
 	public synchronized void merge_threads_authors(Map<String, Integer> authors_aux_list) {
 		for (Map.Entry<String, Integer> entry : authors_aux_list.entrySet()) {
-			if (this.authors.containsKey(entry.getKey())) {
-				int val = this.authors.get(entry.getKey());
-				this.authors.put(entry.getKey(), val + entry.getValue());
-			} else {
-				this.authors.put(entry.getKey(), entry.getValue());
-			}
+			this.authors.merge(entry.getKey(), entry.getValue(), Integer::sum);
 		}
 	}
 

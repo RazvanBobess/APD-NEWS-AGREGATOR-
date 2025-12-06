@@ -49,7 +49,7 @@ public class MyThread extends Thread{
 
 		categories_list = new HashMap<>();
 		languages_list = new HashMap<>();
-		keywords_list = new TreeMap<>();
+		keywords_list = new HashMap<>();
 		most_recent_articles = new HashMap<>();
 		authors_list = new HashMap<>();
 	}
