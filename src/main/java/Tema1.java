@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.concurrent.CyclicBarrier;
 
 public class Tema1 {
-	// number of threads that will be used
 	private static int P;
 
 	public static void process_file(String file_path, ArrayList<String> file_content) {
@@ -61,6 +60,5 @@ public class Tema1 {
 				e.printStackTrace();
 			}
 		}
-
 	}
 }
